@@ -1,0 +1,211 @@
+
+name: Build Cashflow Usaha Pro
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Create Android project
+        shell: bash
+        run: |
+          mkdir -p app/src/main/java/id/cashflow/usahapro
+          mkdir -p app/src/main/assets
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = 'CashflowUsahaPro'
+          include ':app'
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'id.cashflow.usahapro'
+              compileSdk 35
+              defaultConfig {
+                  applicationId 'id.cashflow.usahapro'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 1
+                  versionName '0.1.0'
+              }
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar"
+                  android:label="Cashflow Usaha Pro"
+                  android:allowBackup="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/id/cashflow/usahapro/MainActivity.java <<'EOF'
+          package id.cashflow.usahapro;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebSettings;
+
+          public class MainActivity extends Activity {
+              @Override public void onCreate(Bundle b) {
+                  super.onCreate(b);
+                  WebView w = new WebView(this);
+                  WebSettings s = w.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  setContentView(w);
+                  w.loadUrl("file:///android_asset/index.html");
+              }
+          }
+          EOF
+
+          cat > app/src/main/assets/index.html <<'EOF'
+          <!doctype html>
+          <html lang="id">
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>Cashflow Usaha Pro</title>
+          <style>
+          body{font:16px Arial;background:#f1f5f2;margin:0;color:#183b2c}
+          header{background:#123c2d;color:white;padding:24px}
+          main{padding:15px}.card{background:white;padding:15px;margin:12px 0;border-radius:14px}
+          input,select,button{box-sizing:border-box;width:100%;padding:12px;margin:6px 0;border:1px solid #ccc;border-radius:9px}
+          button{background:#185b40;color:white;font-weight:bold}
+          .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+          small{color:#68776d}
+          </style>
+          <header><h2>Cashflow Usaha Pro</h2>Catat • Hitung • Kembangkan</header>
+          <main>
+          <div class="grid">
+          <div class="card">Omzet<strong id="omzet">Rp0</strong></div>
+          <div class="card">Laba bersih<strong id="laba">Rp0</strong></div>
+          </div>
+          <div class="card">
+          <h3>Catat transaksi</h3>
+          <select id="jenis" onchange="form()">
+          <option value="buy">Pembelian</option>
+          <option value="sell">Penjualan</option>
+          <option value="expense">Biaya operasional</option>
+          </select>
+          <select id="produk">
+          <option>Pertalite</option><option>Pertamax 92</option>
+          <option>Pertamax Turbo</option><option>Roundup</option>
+          <option>Gramoxone</option><option>Ali</option>
+          </select>
+          <div id="fields"></div>
+          <input id="catatan" placeholder="Keterangan transaksi">
+          <button onclick="simpan()">Simpan transaksi</button>
+          </div>
+          <div class="card"><h3>Stok produk</h3><div id="stok"></div></div>
+          <div class="card"><h3>Riwayat</h3><div id="riwayat"></div></div>
+          </main>
+          <script>
+          const nama=['Pertalite','Pertamax 92','Pertamax Turbo','Roundup','Gramoxone','Ali'];
+          const satuan=['L','L','L','L','L','kemasan'];
+          let d=JSON.parse(localStorage.getItem('cfup')||'null')||
+          {p:nama.map((n,i)=>({n,unit:satuan[i],s:0,c:0})),t:[]};
+          const el=id=>document.getElementById(id);
+          const uang=n=>'Rp'+Math.round(n).toLocaleString('id-ID');
+          function form(){
+          let j=el('jenis').value,i=nama.indexOf(el('produk').value);
+          if(j==='buy'){
+          el('fields').innerHTML=(i<3?
+          '<input id="nom" type="number" placeholder="Nominal pembelian (Rp)"><input id="pump" type="number" placeholder="Volume meter pompa (L)">':'<input id="nom" type="number" placeholder="Modal pembelian total (Rp)">')+
+          '<input id="qty" type="number" step=".01" placeholder="'+(i===5?'Jumlah kemasan':'Volume aktual (liter)')+'">';
+          }else if(j==='sell'){
+          el('fields').innerHTML='<input id="qty" type="number" step=".01" placeholder="Jumlah terjual"><input id="harga" type="number" placeholder="Harga jual per unit (Rp)">';
+          }else{
+          el('fields').innerHTML='<input id="nom" type="number" placeholder="Nominal biaya (Rp)">';
+          }
+          }
+          function simpan(){
+          let j=el('jenis').value,n=el('produk').value,i=nama.indexOf(n),p=d.p[i],date=new Date().toISOString().slice(0,10),note=el('catatan').value;
+          if(j==='expense'){
+          let a=+el('nom').value;if(a<=0)return alert('Isi nominal biaya');
+          d.t.push({j,date,n:'Operasional',a,note});
+          }else if(j==='buy'){
+          let a=+el('nom').value,q=+el('qty').value,pump=i<3?+el('pump').value:null;
+          if(a<=0||q<=0||(i<3&&pump<=0))return alert('Periksa nominal dan jumlah');
+          p.s+=q;p.c+=a;
+          d.t.push({j,date,n,q,a,pump,note});
+          }else{
+          let q=+el('qty').value,h=+el('harga').value;
+          if(q<=0||h<=0||q>p.s)return alert('Jumlah tidak valid atau stok kurang');
+          let c=p.c/p.s*q,r=q*h;p.s-=q;p.c=Math.max(0,p.c-c);
+          d.t.push({j,date,n,q,r,c,note});
+          }
+          localStorage.setItem('cfup',JSON.stringify(d));el('catatan').value='';render();alert('Transaksi tersimpan');
+          }
+          function render(){
+          let rev=d.t.filter(x=>x.j==='sell').reduce((a,x)=>a+x.r,0);
+          let c=d.t.filter(x=>x.j==='sell').reduce((a,x)=>a+x.c,0);
+          let ex=d.t.filter(x=>x.j==='expense').reduce((a,x)=>a+x.a,0);
+          el('omzet').textContent=uang(rev);el('laba').textContent=uang(rev-c-ex);
+          el('stok').innerHTML=d.p.map(p=>'<p><b>'+p.n+'</b>: '+p.s+' '+p.unit+' · HPP '+uang(p.s?p.c/p.s:0)+'</p>').join('');
+          el('riwayat').innerHTML=d.t.slice().reverse().map(x=>'<p>'+x.date+' · '+x.j+' · '+x.n+' · '+uang(x.r||x.a||0)+'</p>').join('')||'Belum ada transaksi';
+          }
+          form();render();
+          </script>
+          </html>
+          EOF
+
+      - name: Build APK
+        run: gradle assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cashflow-Usaha-Pro-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
